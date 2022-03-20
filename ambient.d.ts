@@ -1,6 +1,16 @@
 declare namespace NodeJS {
     interface ProcessEnv {
-        ICAL_URLS: string
+
+        /**
+         * Comma-separated list of ICS links
+         */
+        ICAL_URLS: string;
+
+        /**
+         * Should past events be hidden
+         */
+        HIDE_PAST: string;
+
     }
 }
 

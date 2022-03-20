@@ -11,12 +11,15 @@
   "dependencies": {
     "bunyan": "^1.8.15",
     "dotenv": "^16.0.0",
+    "moment": "^2.29.1",
+    "node-ical": "^0.14.1",
     "polka": "^0.5.2",
     "sucrase": "^3.20.3"
   },
   "devDependencies": {
     "@types/bunyan": "^1.8.8",
     "@types/dotenv": "^8.2.0",
+    "@types/moment": "^2.13.0",
     "@types/node": "^17.0.21",
     "@types/polka": "^0.5.4",
     "nodemon": "^2.0.15"
