@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "bunyan": "^1.8.15",
+    "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "moment": "^2.29.1",
     "node-ical": "^0.14.1",

@@ -3,6 +3,7 @@ import bunyan from 'bunyan';
 import polka from 'polka';
 import ical from 'node-ical'
 import moment from 'moment';
+import cors from 'cors'
 
 const logger = bunyan.createLogger({
     name: "wyd proxy",
@@ -57,6 +58,8 @@ function retrieveCalendar(url: string) {
 }
 
 const app = polka()
+app.use(cors())
+
 app.get("/", async (req, res) => {
     return res.end(JSON.stringify({
         status: true,
