@@ -9,6 +9,7 @@ import type RRule from 'rrule'
 
 const logger = bunyan.createLogger({
     name: "wyd proxy",
+    level: 'debug'
 })
 
 const env: NodeJS.ProcessEnv = dotenv.config().parsed as any
@@ -18,8 +19,6 @@ if (!ICAL_URLS || ICAL_URLS.length === 0) {
     logger.fatal("No iCal links passed into ICAL_URLS env")
     process.exit(1)
 }
-
-const HIDE_PAST = env.HIDE_PAST === 'true'
 
 const cache: {
     [url: string]: {
@@ -31,30 +30,36 @@ const cache: {
 
 function retrieveCalendar(url: string) {
     function makeRequest() {
-        let currentTime = moment().startOf('day')
 
         let promise = ical.fromURL(url).then((data) => {
             let temp = Object.values(data).filter(({ type }) => type === 'VEVENT')
+            let currentTime = moment().startOf('day')
+            let monthFuture = currentTime.clone().add('1', 'month')
 
             temp = temp.flatMap((evt) => {
                 let res = [evt]
                 if (evt.rrule) {
-                    let duration = moment(<Date>evt.end).diff(<Date>evt.start)
+                    let delta = moment(<Date>evt.end).diff(<Date>evt.start)
 
-                    res.push(...(<RRule>evt.rrule).between(<Date>evt.start, moment(<Date>evt.end).add('1', 'year').toDate()).map(newStart => {
-                        return {
-                            ...evt,
-                            start: newStart, end: moment(newStart).add(duration).toDate()
-                        } as CalendarComponent
-                    }))
+                    res.push(
+                        ...(<RRule>evt.rrule).between(currentTime.toDate(), monthFuture.toDate())
+                            .map(newStart =>
+                            (<CalendarComponent>{
+                                ...evt,
+                                start: newStart,
+                                end: moment(newStart).add(delta).toDate()
+                            }))
+                    )
                 }
 
                 return res.map(eventDataCleaner)
             })
 
-            if (HIDE_PAST) temp = temp.filter(event => currentTime.isBefore(<Date>event.end))
+            temp = temp.filter(event => currentTime.isBefore(<Date>event.end))
 
             let responseData = temp.map(eventDataCleaner)
+            responseData = responseData.sort((a, b) => (<any>a.start - <any>b.start))
+
             Object.assign(cache[url], {
                 _promise: null,
                 data: responseData,
@@ -71,10 +76,23 @@ function retrieveCalendar(url: string) {
         return promise;
     }
 
-    if (!cache[url]) return makeRequest()
-    if (cache[url].lastUpdate && moment().subtract('5', 'minutes').isAfter(cache[url].lastUpdate)) return makeRequest()
+    if (!cache[url]) {
+        logger.debug("Requesting initial data")
+        return makeRequest()
+    }
 
-    return cache[url]._promise || cache[url].data;
+    if (cache[url].lastUpdate && moment().subtract('5', 'minutes').isAfter(cache[url].lastUpdate)) {
+        logger.debug("Requesting updated data")
+        return makeRequest()
+    }
+
+    if (cache[url].data) {
+        logger.debug("Returning cached result")
+        return cache[url].data
+    }
+
+    logger.debug("Returning promise")
+    return cache[url]._promise
 }
 
 const app = polka()
@@ -84,7 +102,7 @@ app.get("/", async (req, res) => {
     return res.end(JSON.stringify({
         status: true,
         data: await Promise.all(ICAL_URLS.map(url => retrieveCalendar(url))).then(C => C.flat())
-    }, null, 4))
+    }))
 })
 
 app.listen(8080, '0.0.0.0', async function () {

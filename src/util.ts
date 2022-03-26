@@ -5,3 +5,4 @@ export function eventDataCleaner(evt: CalendarComponent) {
 
     return { start, end, description, location, summary } as CalendarComponent
 }
+
