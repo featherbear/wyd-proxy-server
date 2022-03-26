@@ -26,8 +26,8 @@ export function retrieveCalendar(url: string) {
 
         let promise = ical.fromURL(url).then((data) => {
             let temp = Object.values(data).filter(({ type }) => type === 'VEVENT')
-            let currentTime = moment().startOf('day')
-            let monthFuture = currentTime.clone().add('1', 'month')
+            let currentDay = moment().startOf('day')
+            let monthFuture = currentDay.clone().add('1', 'month')
 
             temp = temp.flatMap((evt) => {
                 let res = [evt]
@@ -35,7 +35,7 @@ export function retrieveCalendar(url: string) {
                     let delta = moment(<Date>evt.end).diff(<Date>evt.start)
 
                     res.push(
-                        ...(<RRule><unknown>evt.rrule).between(currentTime.toDate(), monthFuture.toDate())
+                        ...(<RRule><unknown>evt.rrule).between(currentDay.toDate(), monthFuture.toDate())
                             .map(newStart =>
                             (<CalendarComponent>{
                                 ...evt,
@@ -48,7 +48,8 @@ export function retrieveCalendar(url: string) {
                 return res.map(eventDataCleaner)
             })
 
-            temp = temp.filter(event => currentTime.isBefore(<Date>event.end))
+            temp = temp.filter(event => currentDay.isBefore(<Date>event.end))
+            temp = temp.filter(event => monthFuture.isAfter(<Date>event.start))
 
             let responseData = temp.map(eventDataCleaner)
             responseData = responseData.sort((a, b) => (<any>a.start - <any>b.start))
