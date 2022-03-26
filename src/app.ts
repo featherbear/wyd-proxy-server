@@ -1,9 +1,11 @@
 import dotenv from 'dotenv'
 import bunyan from 'bunyan';
 import polka from 'polka';
-import ical from 'node-ical'
+import ical, { CalendarComponent } from 'node-ical'
 import moment from 'moment';
 import cors from 'cors'
+import { eventDataCleaner } from './util';
+import type RRule from 'rrule'
 
 const logger = bunyan.createLogger({
     name: "wyd proxy",
@@ -32,16 +34,34 @@ function retrieveCalendar(url: string) {
         let currentTime = moment().startOf('day')
 
         let promise = ical.fromURL(url).then((data) => {
-            let cleaned = Object.values(data).filter(({ type }) => type === 'VEVENT')
-            if (HIDE_PAST) cleaned = cleaned.filter(event => currentTime.isBefore(<Date>event.end))
+            let temp = Object.values(data).filter(({ type }) => type === 'VEVENT')
 
+            temp = temp.flatMap((evt) => {
+                let res = [evt]
+                if (evt.rrule) {
+                    let duration = moment(<Date>evt.end).diff(<Date>evt.start)
+
+                    res.push(...(<RRule>evt.rrule).between(<Date>evt.start, moment(<Date>evt.end).add('1', 'year').toDate()).map(newStart => {
+                        return {
+                            ...evt,
+                            start: newStart, end: moment(newStart).add(duration).toDate()
+                        } as CalendarComponent
+                    }))
+                }
+
+                return res.map(eventDataCleaner)
+            })
+
+            if (HIDE_PAST) temp = temp.filter(event => currentTime.isBefore(<Date>event.end))
+
+            let responseData = temp.map(eventDataCleaner)
             Object.assign(cache[url], {
                 _promise: null,
-                data: cleaned,
+                data: responseData,
                 lastUpdate: new Date()
             })
 
-            return cleaned
+            return responseData
         })
 
         cache[url] = {
@@ -64,7 +84,7 @@ app.get("/", async (req, res) => {
     return res.end(JSON.stringify({
         status: true,
         data: await Promise.all(ICAL_URLS.map(url => retrieveCalendar(url))).then(C => C.flat())
-    }))
+    }, null, 4))
 })
 
 app.listen(8080, '0.0.0.0', async function () {
